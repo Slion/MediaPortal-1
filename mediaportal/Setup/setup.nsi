@@ -489,6 +489,9 @@ Section "MediaPortal core files (required)" SecCore
   ; libbluray
   SetOutPath "$MPdir.Base"
   File /oname=bluray.dll "${git_DirectShowFilters}\bin_Win32\libbluray\libbluray.dll"
+  ; Minidisplay
+  File "${git_ROOT}\Packages\MediaPortal-iMON-Display.1.0.0\lib\iMONDisplay.dll"
+  File "${git_ROOT}\Packages\MediaPortal-iMON-Display.1.0.0\lib\iMONDisplayWrapper.dll"
   ; TvLibrary for Genre
   File "${git_TVServer}\TvLibrary.Interfaces\bin\${BUILD_TYPE}\TvLibrary.Interfaces.dll"
   File "${git_MP}\LastFMLibrary\bin\${BUILD_TYPE}\LastFMLibrary.dll"
@@ -606,6 +609,8 @@ SectionEnd
   Delete "$MPdir.Base\Dxerr9.dll"
   Delete "$MPdir.Base\mpcSubs.dll"
   Delete "$MPdir.Base\MiniDisplayLibrary.dll"
+  Delete "$MPdir.Base\iMONDisplay.dll"
+  Delete "$MPdir.Base\iMONDisplayWrapper.dll"
   ; Utils
   Delete "$MPdir.Base\Utils.dll"
   ; Common Utils

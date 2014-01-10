@@ -58,6 +58,8 @@ xcopy %1\ProcessPlugins\MusicShareWatcher\MusicShareWatcher\bin\%2\MusicShareWat
 
 REM MiniDisplayLibrary
 xcopy %1\MiniDisplayLibrary\bin\%2\MiniDisplayLibrary.* . /Y /D
+xcopy %1\..\Packages\MediaPortal-iMON-Display.1.0.0\lib\iMONDisplay.dll . /Y /D
+xcopy %1\..\Packages\MediaPortal-iMON-Display.1.0.0\lib\iMONDisplayWrapper.dll . /Y /D
 
 REM RemotePlugins
 xcopy %1\RemotePlugins\bin\%2\RemotePlugins.* . /Y /D
