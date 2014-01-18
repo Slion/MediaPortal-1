@@ -1412,7 +1412,7 @@ namespace MediaPortal
     /// <param name="visible"></param>
     public void ShowMouseCursor(bool visible)
     {
-      int state = 0;
+      int state = ShowCursor(true);
       Cursor current = Cursor.Current;
 
       switch (visible)
@@ -1420,22 +1420,30 @@ namespace MediaPortal
         case true:
           if (current != null)
           {
+            while (state > 1)
+            {
+              state = ShowCursor(false);
+            }
             while (state < 1)
             {
               state = ShowCursor(true);
+            }
               Cursor.Show();
             }
-          }
           break;
         case false:
           if (current != null)
           {
+            while (state < -1)
+            {
+              state = ShowCursor(true);
+            }
             while (state > -1)
             {
               state = ShowCursor(false);
+            }
               Cursor.Hide();
             }
-          }
           break;
       }
       Log.Debug("D3D: Cursor ShowMouseCursor state {0}", state);
