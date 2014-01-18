@@ -80,6 +80,13 @@ namespace MediaPortal
 
     // ReSharper disable InconsistentNaming
     private const int D3DSWAPEFFECT_FLIPEX = 5;
+    private const int numberOfRetries = 20;
+    private const int numberOfRetriesEnum = 20;
+    private const int numberOfRetriesAdaptor = 20;
+    private const int delayBetweenTries = 5000;
+    private static int retries = 0;
+    private static bool successful = false;
+    private static bool successfulInit = false;
     // ReSharper restore InconsistentNaming
 
     #endregion
@@ -139,7 +146,7 @@ namespace MediaPortal
 
     private readonly Control           _renderTarget;             // render target object
     private readonly PresentParameters _presentParams;            // D3D presentation parameters
-    internal readonly D3DEnumeration   _enumerationSettings;      //
+    internal D3DEnumeration            _enumerationSettings;      //
     private readonly bool              _useExclusiveDirectXMode;  // 
     private readonly bool              _disableMouseEvents;       //
     private readonly bool              _doNotWaitForVSync;        // debug setting
@@ -307,6 +314,41 @@ namespace MediaPortal
     /// </summary>
     protected virtual void OnExit() { }
 
+    /// <summary>
+    /// 
+    /// </summary>
+    protected virtual void OnEnumeration()
+    {
+      _enumerationSettings = new D3DEnumeration();
+      int enumIntCount = 0;
+      bool ConfirmDeviceCheck = false;
+
+      // get display adapter info
+      while (ConfirmDeviceCheck != true && enumIntCount < numberOfRetriesEnum)
+      {
+        try
+        {
+          Log.Debug("D3D: Starting and find Enumeration Settings - retry {0}", enumIntCount);
+          _enumerationSettings.ConfirmDeviceCallback = ConfirmDevice;
+          try
+          {
+            _enumerationSettings.Enumerate();
+            ConfirmDeviceCheck = true;
+          }
+          catch (Exception ex)
+          {
+            Log.Error("D3D: failed to _enumerationSettings exception {0}", ex);
+            _enumerationSettings = new D3DEnumeration();
+          }
+        }
+        catch (Exception ex)
+        {
+          Log.Error("D3D: Starting and find _enumerationSettings exception {0}", ex);
+          _enumerationSettings = new D3DEnumeration();
+        }
+        enumIntCount++;
+      }
+    }
 
     /// <summary>
     /// Init graphics device
@@ -316,6 +358,18 @@ namespace MediaPortal
     protected bool Init()
     {
       Log.Debug("D3D: Init()");
+
+      // Reset Adapter
+      AdapterInfo = null;
+
+      // log information about available adapters
+      var enumeration = new D3DEnumeration();
+      enumeration.Enumerate();
+      foreach (GraphicsAdapterInfo ai in enumeration.AdapterInfoList)
+      {
+        Log.Debug("D3D: Init Adapter #{0}: {1} - Driver: {2} ({3}) - DeviceName: {4}",
+          ai.AdapterOrdinal, ai.AdapterDetails.Description, ai.AdapterDetails.DriverName, ai.AdapterDetails.DriverVersion, ai.AdapterDetails.DeviceName);
+      }
 
       // Set up cursor
       _renderTarget.Cursor = Cursors.Default;
@@ -329,10 +383,40 @@ namespace MediaPortal
       // Initialize the application timer
       DXUtil.Timer(DirectXTimer.Start);
 
+      int adapIntCount = 0;
+
       // get display adapter info
-      _enumerationSettings.ConfirmDeviceCallback = ConfirmDevice;
-      _enumerationSettings.Enumerate();
+      OnEnumeration();
+
+      // Reset counter
+      adapIntCount = 0;
+
+      while (AdapterInfo == null && adapIntCount < numberOfRetriesAdaptor)
+      {
+        try
+        {
+          Log.Debug("D3D: Starting and find Adapter info - retry #{0}", adapIntCount);
+          adapIntCount++;
       AdapterInfo = FindAdapterForScreen(GUIGraphicsContext.currentScreen);
+          if (AdapterInfo == null)
+          {
+            OnEnumeration();
+          }
+          if (AdapterInfo != null)
+          {
+            Log.Debug("D3D: Starting and find Adapter #{0}: {1} - retry #{2}", AdapterInfo.AdapterOrdinal, AdapterInfo, adapIntCount);
+          }
+          else
+          {
+            Log.Debug("D3D: Adapter info is not detected - retry #{0}", adapIntCount);
+          }
+        }
+        catch (Exception ex)
+        {
+          Log.Error("D3D: Starting and find AdapterInfo exception {0}", ex);
+          AdapterInfo = null;
+        }
+      }
       
       if (!Windowed)
       {
@@ -356,8 +440,11 @@ namespace MediaPortal
                  GUIGraphicsContext.currentScreen.Bounds.Width, GUIGraphicsContext.currentScreen.Bounds.Height);
       }
 
+      if (!successful)
+      {
       // Initialize D3D Device
       InitializeDevice();
+      }
 
       return true;
     }
@@ -1035,8 +1122,9 @@ namespace MediaPortal
         var rect = Screen.FromRectangle(info.MonitorRectangle).Bounds;
         if (rect.Equals(screen.Bounds))
         {
-          GUIGraphicsContext.currentStartScreen = GUIGraphicsContext.currentScreen;
-          return adapterInfo;
+          Log.Debug("D3D: FindAdapterForScreen Adapter #{0}: {1} - Driver: {2} ({3}) - DeviceName: {4}",
+          adapterInfo.AdapterOrdinal, adapterInfo.AdapterDetails.Description, adapterInfo.AdapterDetails.DriverName, adapterInfo.AdapterDetails.DriverVersion, adapterInfo.AdapterDetails.DeviceName);
+          GUIGraphicsContext.currentStartScreen = GUIGraphicsContext.currentScreen;          return adapterInfo;
         }
       }
       return null;
@@ -1105,7 +1193,12 @@ namespace MediaPortal
       // get capabilities of hardware device for current adapter
       Caps capabilities = GetCapabilities();
 
+      if (!successfulInit)
+      {
+        if (AdapterInfo != null)
+        {
       Log.Info("D3D: GPU '{0}' is using driver version '{1}'", AdapterInfo.AdapterDetails.Description.Trim(), AdapterInfo.AdapterDetails.DriverVersion);
+        }
       Log.Info("D3D: Vertex shader version: {0}", capabilities.VertexShaderVersion);
       Log.Info("D3D: Pixel shader version: {0}", capabilities.PixelShaderVersion);
 
@@ -1173,7 +1266,7 @@ namespace MediaPortal
       {
         Log.Info("D3D: Creating DirectX9 device");
         GUIGraphicsContext.DX9Device = new Device(AdapterInfo.AdapterOrdinal,
-                                                  _deviceType, 
+                                                    _deviceType,
                                                   _renderTarget,
                                                   _createFlags | CreateFlags.MultiThreaded | CreateFlags.FpuPreserve,
                                                   _presentParams);
@@ -1201,6 +1294,7 @@ namespace MediaPortal
       {
         InitializeDeviceObjects();
         AppActive = true;
+          successfulInit = true;
       }
       catch (Exception ex)
       {
@@ -1208,6 +1302,7 @@ namespace MediaPortal
         GUIGraphicsContext.DX9Device.Dispose();
         GUIGraphicsContext.DX9Device = null;
       }
+    }
     }
 
 
@@ -1219,14 +1314,12 @@ namespace MediaPortal
     {
       Log.Debug("D3D: GetCapabilities()");
 
-      const int numberOfRetries   = 20;
-      const int delayBetweenTries = 250;
 
       Caps capabilities;
   
       // retry ever 100 ms to get the capabilities for the selected adapter for a maximum time of 100 tries
-      int retries = 0;
-      bool successful = false;
+      if (!successful)
+      {
       do
       {
         try
@@ -1236,11 +1329,25 @@ namespace MediaPortal
         }
         catch (Exception)
         {
-          Log.Warn("Main: Failed to get capabilities for adapter #{0}: {1} (retry in {2}ms)", AdapterInfo.AdapterOrdinal, AdapterInfo.ToString(), delayBetweenTries);
           retries++;
+            if (AdapterInfo != null)
+            {
+              Log.Warn("Main: Failed to get capabilities for adapter #{0}: {1} (retry in {2}ms) try reinit #{3}", AdapterInfo.AdapterOrdinal, AdapterInfo.ToString(), delayBetweenTries, retries);
+            }
+            else
+            {
+              Log.Warn("Main: Failed to get capabilities for adapter (retry in {0}ms) try reinit #{1}", delayBetweenTries, retries);
+            }
           Thread.Sleep(delayBetweenTries);
+
+            // Restart Init sequence
+            if (retries < numberOfRetries)
+            {
+              Init();
         }
+          }
       } while (!successful && retries < numberOfRetries);
+      }
 
       // MP needs a hardware device, or it will be unusable
       if (!successful)
